@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service';
 
 @Controller()
@@ -13,7 +13,16 @@ export class AppController {
   }
 
   @Get('sigIn')
-  sigIn() {
-    return this.appService.sigIn();
+  sigIn(@Query() query) {
+    const { userName, password } = query;
+    if (!userName || !password) {
+      return {
+        success: false,
+        msg: `请填写github： userName password`,
+      };
+    }
+    console.log(userName, password);
+
+    return this.appService.sigIn(userName, password);
   }
 }

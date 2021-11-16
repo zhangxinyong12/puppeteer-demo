@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import { Injectable } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 
@@ -31,14 +32,15 @@ export class AppService {
       'https://github.com/login?client_id=60483ab971aa5416e000&return_to=%2Flogin%2Foauth%2Fauthorize%3Fclient_id%3D60483ab971aa5416e000%26redirect_uri%3Dhttps%253A%252F%252Fjuejin.cn%252Fpassport%252Fauth%252Flogin_success%26scope%3Duser%253Aemail%26state%3Dbc346bc13gASoVCgoVPZIGZiM2JkNjA4ZjAzZWFjNzY0ZTI3ZTgwOGQ2NTU0YmNjoU6-aHR0cHM6Ly9qdWVqaW4uY24vb2F1dGgtcmVzdWx0oVYBoUkAoUQAoUHRCjChTdEKMKFIqWp1ZWppbi5jbqFSBKJQTNEEFaZBQ1RJT06goUyyaHR0cHM6Ly9qdWVqaW4uY24voVTZIDMzYjQ0NmNmNDhhMmZmNWE0YmEyYzVmMjA5YTc3Njk1oVcAoUYAolNBAKFVww%253D%253D';
   }
   // 创建爬虫任务
-  async sigIn() {
+  async sigIn(userName, password) {
     const url = 'https://juejin.cn';
     const githubUrl =
       'https://github.com/login?client_id=60483ab971aa5416e000&return_to=%2Flogin%2Foauth%2Fauthorize%3Fclient_id%3D60483ab971aa5416e000%26redirect_uri%3Dhttps%253A%252F%252Fjuejin.cn%252Fpassport%252Fauth%252Flogin_success%26scope%3Duser%253Aemail%26state%3Dbc346bc13gASoVCgoVPZIGZiM2JkNjA4ZjAzZWFjNzY0ZTI3ZTgwOGQ2NTU0YmNjoU6-aHR0cHM6Ly9qdWVqaW4uY24vb2F1dGgtcmVzdWx0oVYBoUkAoUQAoUHRCjChTdEKMKFIqWp1ZWppbi5jbqFSBKJQTNEEFaZBQ1RJT06goUyyaHR0cHM6Ly9qdWVqaW4uY24voVTZIDMzYjQ0NmNmNDhhMmZmNWE0YmEyYzVmMjA5YTc3Njk1oVcAoUYAolNBAKFVww%253D%253D';
 
     // const url = 'https://baidu.com/';
     // 创建一个puppetter 启动一个浏览器环境
-    const browser = await puppeteer.launch({ headless: false });
+    // headless 是否打开浏览器窗口页面
+    const browser = await puppeteer.launch({ headless: true });
     // 打开新页面
     const page = await browser.newPage();
     // 通过url打开指定页面
@@ -46,43 +48,58 @@ export class AppService {
     const githubPage = await browser.newPage();
     await githubPage.goto(githubUrl);
     const githubBody = await githubPage.$('body');
-    await githubBody.evaluate((body: any) => {
-      body.querySelector('#login_field').value = '13271150671@wo.cn';
-      body.querySelector('#password').value = 'woziji@13271150671';
-      body
+    // 监听console.log 否则page.evaluate里面的console看不到
+    githubPage.on('console', (msg) => {
+      for (let i = 0; i < msg.args().length; ++i)
+        console.log(`githubPage: ${msg.args()[i]}`); // 这句话的效果是打印到你的代码的控制台
+    });
+    console.log('--');
+    console.log({ userName, password });
+
+    await githubBody.evaluate((data: any, userName, password) => {
+      console.log(data);
+      console.log('userName', userName);
+      console.log('password', password);
+
+      (document as any).querySelector('#login_field').value = userName;
+      (document as any).querySelector('#password').value = password;
+      (document as any)
         .querySelector('.btn.btn-primary.btn-block.js-sign-in-button')
         .click();
-    }, githubBody);
+    }, userName, password);
     await page.goto(url);
     await page.waitForTimeout(10000);
-
+    githubPage.close();
     await page.goto('https://juejin.cn/user/center/signin?from=avatar_menu');
 
     // 监听console.log 否则page.evaluate里面的console看不到
     page.on('console', (msg) => {
       for (let i = 0; i < msg.args().length; ++i)
-        console.log(`${i}: ${msg.args()[i]}`); // 这句话的效果是打印到你的代码的控制台
+        console.log(`page: ${msg.args()[i]}`); // 这句话的效果是打印到你的代码的控制台
     });
     page.on('pageerror', (error) => {
       console.log('加载页面失败', error);
     });
     const bodyHandle = await page.$('body');
     // 代码运行到浏览器里面。不是后台服务里面
-    const titleList = await page.evaluate((body) => {
-      console.log('body', body);
-      const loginBtn = document.querySelectorAll('.login-button');
-      console.log(loginBtn);
-      Array.from(loginBtn).forEach((el) => {
-        console.log(el.innerHTML);
-      });
-      return { loginBtn };
+    const msg = await page.evaluate((body) => {
+      let msg = '';
+      const btn: any = body.querySelector('.signin.btn');
+      if (btn) {
+        btn.click();
+        msg = '签到成功';
+      } else {
+        body.querySelector('.signedin.btn').click();
+        msg = '已经签到';
+      }
+      return Promise.resolve(msg);
     }, bodyHandle);
     // 等待一定时间 已废弃
-    // page.waitForTimeout(2500);
+    page.waitForTimeout(5000);
     // 关闭浏览器
-    // await bodyHandle.dispose();
+    await page.close();
 
-    return { success: true, data: titleList };
+    return { success: true, data: msg };
   }
 
   // async findData(page) {
