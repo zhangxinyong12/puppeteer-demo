@@ -7,7 +7,7 @@ import * as  fs from 'fs';
 export class AppService {
   path = './user.text';
   userList = [];
-  headless = false; // 是否打开浏览器窗口 本地调试使用
+  headless = true; // 是否打开浏览器窗口 本地调试使用
   constructor() {
     // 13271150671@wo.cn woziji@13271150671
     this.job();
@@ -86,7 +86,7 @@ export class AppService {
     });
     const bodyHandle = await page.$('body');
     // 代码运行到浏览器里面。不是后台服务里面
-    const msg = await page.evaluate((body) => {
+    const dataMsg = await page.evaluate((body) => {
       let msg = '';
       let btn: any = body.querySelector('.signin.btn');
       if (btn) {
@@ -102,14 +102,18 @@ export class AppService {
           msg = '签到失败';
         }
       }
+      console.log(msg);
+
       return Promise.resolve(msg);
     }, bodyHandle);
     // 等待一定时间 已废弃
     await page.waitForTimeout(5000);
     // 关闭浏览器
-    // await page.close();
+    await page.close();
+    console.log('dataMsg', dataMsg);
 
-    return { success: true, data: msg };
+    return { success: true, data: dataMsg };
+
   }
 
   //  创建定时任务
