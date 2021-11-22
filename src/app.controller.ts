@@ -25,4 +25,17 @@ export class AppController {
 
     return this.appService.sigIn(userName, password);
   }
+  @Get('sigInCookie')
+  sigInCookie(@Query() query) {
+    // const { userName, password } = query;
+    // if (!userName || !password) {
+    //   return {
+    //     success: false,
+    //     msg: `请填写github： userName password`,
+    //   };
+    // }
+    // console.log(userName, password);
+
+    return this.appService.sigInCookie();
+  }
 }

@@ -1,21 +1,97 @@
-/* eslint-disable prettier/prettier */
 import { Injectable } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 import * as schedule from 'node-schedule';
 import * as  fs from 'fs';
+import { cookieList } from './cookie';
+
 @Injectable()
 export class AppService {
   path = './user.text';
   userList = [];
   headless = true; // 是否打开浏览器窗口 本地调试使用
+  githubToken = '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';
   constructor() {
     // 13271150671@wo.cn woziji@13271150671
     this.job();
     this.addUser('13271150671@wo.cn', 'woziji@13271150671');
   }
-
+  // pm2 启动
+  // pm2 start npm --name autojuejin -- run start
   getHello(): string {
     return 'Hello World!';
+  }
+
+  async sigInCookie() {
+    const url = 'https://juejin.cn';
+    const browser = await puppeteer.launch({
+      headless: this.headless,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    const page = await browser.newPage();
+    const list = [];
+    cookieList.forEach(async (el) => {
+      const item = {
+        name: el.name,
+        value: el.value,
+        // url: 'juejin.cn',
+        domain: el.domain,
+        path: el.path,
+        expires: el.expirationDate,
+        httpOnly: el.httpOnly,
+        secure: el.secure,
+        sameSite: el.sameSite
+      };
+      list.push(item);
+      await page.setCookie(item as any);
+
+    });
+    await page.setCookie(...list as any);
+
+    await page.goto(url);
+
+    await page.waitForTimeout(3000);
+    await page.goto('https://juejin.cn/user/center/signin');
+    await page.waitForTimeout(5000);
+
+    // 监听console.log 否则page.evaluate里面的console看不到
+    page.on('console', (msg) => {
+      for (let i = 0; i < msg.args().length; ++i)
+        console.log(`page: ${msg.args()[i]}`); // 这句话的效果是打印到你的代码的控制台
+    });
+    page.on('pageerror', (error) => {
+      console.log('加载页面失败', error);
+      return { success: false, msg: '签到失败' };
+    });
+    const bodyHandle = await page.$('body');
+    // 代码运行到浏览器里面。不是后台服务里面
+    const dataMsg = await page.evaluate(async (body) => {
+      let msg = '';
+      let btn: any = body.querySelector('.signin.btn');
+      if (btn) {
+        btn.click();
+        msg = '签到成功';
+      } else {
+        btn = body.querySelector('.signedin.btn');
+        let n;
+        n = document.querySelector('.figure-card.large-card span').textContent;
+        if (btn) {
+          btn.click();
+          msg = '已经签到,当前钻石数：' + n;
+        } else {
+          msg = '签到失败';
+        }
+      }
+      console.log(msg);
+
+      return Promise.resolve(msg);
+    }, bodyHandle);
+    await page.waitForTimeout(5000);
+    // 关闭浏览器
+    await page.close();
+    console.log('dataMsg', dataMsg);
+    return { success: true, data: dataMsg };
+
   }
 
   async setCookies(page) {
@@ -36,22 +112,29 @@ export class AppService {
       resolve(true);
     });
   }
+
+  // https://github.com/login?client_id=60483ab971aa5416e000&return_to=%2Flogin%2Foauth%2Fauthorize%3Fclient_id%3D60483ab971aa5416e000%26redirect_uri%3Dhttps%253A%252F%252Fjuejin.cn%252Fpassport%252Fauth%252Flogin_success%26scope%3Duser%253Aemail%26state%3Dbc346bc13gASoVCgoVPZIGZiM2JkNjA4ZjAzZWFjNzY0ZTI3ZTgwOGQ2NTU0YmNjoU6-aHR0cHM6Ly9qdWVqaW4uY24vb2F1dGgtcmVzdWx0oVYBoUkAoUQAoUHRCjChTdEKMKFIqWp1ZWppbi5jbqFSBKJQTNEEFaZBQ1RJT06goUyyaHR0cHM6Ly9qdWVqaW4uY24voVTZIDMzYjQ0NmNmNDhhMmZmNWE0YmEyYzVmMjA5YTc3Njk1oVcAoUYAolNBAKFVww%253D%253D
   // 创建爬虫任务
   async sigIn(userName, password) {
     this.addUser(userName, password);
     const url = 'https://juejin.cn';
     const githubUrl =
       'https://github.com/login?client_id=60483ab971aa5416e000&return_to=%2Flogin%2Foauth%2Fauthorize%3Fclient_id%3D60483ab971aa5416e000%26redirect_uri%3Dhttps%253A%252F%252Fjuejin.cn%252Fpassport%252Fauth%252Flogin_success%26scope%3Duser%253Aemail%26state%3Dbc346bc13gASoVCgoVPZIGZiM2JkNjA4ZjAzZWFjNzY0ZTI3ZTgwOGQ2NTU0YmNjoU6-aHR0cHM6Ly9qdWVqaW4uY24vb2F1dGgtcmVzdWx0oVYBoUkAoUQAoUHRCjChTdEKMKFIqWp1ZWppbi5jbqFSBKJQTNEEFaZBQ1RJT06goUyyaHR0cHM6Ly9qdWVqaW4uY24voVTZIDMzYjQ0NmNmNDhhMmZmNWE0YmEyYzVmMjA5YTc3Njk1oVcAoUYAolNBAKFVww%253D%253D';
-
     // const url = 'https://baidu.com/';
     // 创建一个puppetter 启动一个浏览器环境
     // headless 是否打开浏览器窗口页面
-    const browser = await puppeteer.launch({ headless: this.headless });
+    const browser = await puppeteer.launch({
+      headless: false,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
     // 打开新页面
     const page = await browser.newPage();
     // 通过url打开指定页面
     // github认证页面
     const githubPage = await browser.newPage();
+    githubPage.setExtraHTTPHeaders({
+      'Authorization': this.githubToken,
+    });
     await githubPage.goto(githubUrl);
     const githubBody = await githubPage.$('body');
     // 监听console.log 否则page.evaluate里面的console看不到
@@ -128,12 +211,13 @@ export class AppService {
   // └───────────────────────── second(0 - 59, OPTIONAL)
   job() {
     // 每天8点执行签到任务
-    schedule.scheduleJob('0 0 8 * * *', async () => {
+    schedule.scheduleJob('0 30 8 * * *', async () => {
       console.log('scheduleCronstyle:' + new Date());
-      await this.getUser();
-      this.userList.forEach(async ({ userName, password }) => {
-        this.sigIn(userName, password);
-      });
+      this.sigInCookie();
+      // await this.getUser();
+      // this.userList.forEach(async ({ userName, password }) => {
+      //   this.sigIn(userName, password);
+      // });
     })
   }
 

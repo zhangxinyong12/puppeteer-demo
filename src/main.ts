@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  await app.listen(3000);
-  console.log('3000端口启动');
+  await app.listen(3001);
+  console.log('3001端口启动');
 }
 bootstrap();
