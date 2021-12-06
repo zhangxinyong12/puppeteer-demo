@@ -1,11 +1,9 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { AppService } from './app.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {
-    console.log(0);
-  }
+  constructor(private readonly appService: AppService) {}
 
   @Get()
   getHello(): string {
@@ -27,15 +25,27 @@ export class AppController {
   }
   @Get('sigInCookie')
   sigInCookie(@Query() query) {
-    // const { userName, password } = query;
-    // if (!userName || !password) {
-    //   return {
-    //     success: false,
-    //     msg: `请填写github： userName password`,
-    //   };
-    // }
-    // console.log(userName, password);
+    const { userName, password } = query;
+    if (!userName || !password) {
+      return {
+        success: false,
+        msg: `请填写github： userName password`,
+      };
+    }
+    console.log(userName, password);
+  }
+  // addCookie
 
-    return this.appService.sigInCookie();
+  @Post('add')
+  add(@Body() body) {
+    console.log(body);
+    const { name } = body;
+    const cookie = JSON.stringify(body.cookie);
+    return this.appService.addCookie(name, cookie);
+  }
+
+  @Post('find')
+  find(@Body() body) {
+    return this.appService.findCookie();
   }
 }

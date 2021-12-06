@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 import * as schedule from 'node-schedule';
-import * as  fs from 'fs';
+import * as fs from 'fs';
 import { cookieList } from './cookie';
+import { InjectRepository } from '@nestjs/typeorm';
+import { User } from './entity/user.entity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class AppService {
@@ -10,10 +13,14 @@ export class AppService {
   userList = [];
   headless = true; // 是否打开浏览器窗口 本地调试使用
   githubToken = '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';
-  constructor() {
+  cookieList = [];
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {
     // 13271150671@wo.cn woziji@13271150671
-    this.job();
-    this.addUser('13271150671@wo.cn', 'woziji@13271150671');
+    // this.job();
+    // this.addUser('13271150671@wo.cn', 'woziji@13271150671');
   }
   // pm2 启动
   // pm2 start npm --name autojuejin -- run start
@@ -21,7 +28,36 @@ export class AppService {
     return 'Hello World!';
   }
 
-  async sigInCookie() {
+  async addCookie(name: string, cookie: string) {
+    const dataUser = await this.userRepository.findOne({ name });
+    console.log(dataUser);
+
+    if (dataUser) {
+      dataUser.cookie = cookie;
+      try {
+        await this.userRepository.save(dataUser);
+        return { code: 200, success: true, message: '更新成功' };
+      } catch (error) {
+        return { code: 200, success: false, message: error };
+      }
+    } else {
+      try {
+        await this.userRepository.save({ name, cookie });
+        return { code: 200, success: true, message: '添加成功' };
+      } catch (error) {
+        return { code: 200, success: false, message: error };
+      }
+    }
+  }
+
+  async findCookie() {
+    const list = await this.userRepository.find();
+    console.log(list);
+
+    return list;
+  }
+
+  async sigInCookie(el) {
     const url = 'https://juejin.cn';
     const browser = await puppeteer.launch({
       headless: this.headless,
@@ -30,23 +66,21 @@ export class AppService {
 
     const page = await browser.newPage();
     const list = [];
-    cookieList.forEach(async (el) => {
-      const item = {
-        name: el.name,
-        value: el.value,
-        // url: 'juejin.cn',
-        domain: el.domain,
-        path: el.path,
-        expires: el.expirationDate,
-        httpOnly: el.httpOnly,
-        secure: el.secure,
-        sameSite: el.sameSite
-      };
-      list.push(item);
-      await page.setCookie(item as any);
 
-    });
-    await page.setCookie(...list as any);
+    const item = {
+      name: el.name,
+      value: el.value,
+      // url: 'juejin.cn',
+      domain: el.domain,
+      path: el.path,
+      expires: el.expirationDate,
+      httpOnly: el.httpOnly,
+      secure: el.secure,
+      sameSite: el.sameSite,
+    };
+    list.push(item);
+    await page.setCookie(item as any);
+    await page.setCookie(...(list as any));
 
     await page.goto(url);
 
@@ -73,8 +107,9 @@ export class AppService {
         msg = '签到成功';
       } else {
         btn = body.querySelector('.signedin.btn');
-        let n;
-        n = document.querySelector('.figure-card.large-card span').textContent;
+        const n = document.querySelector(
+          '.figure-card.large-card span',
+        ).textContent;
         if (btn) {
           btn.click();
           msg = '已经签到,当前钻石数：' + n;
@@ -91,7 +126,6 @@ export class AppService {
     await page.close();
     console.log('dataMsg', dataMsg);
     return { success: true, data: dataMsg };
-
   }
 
   async setCookies(page) {
@@ -133,7 +167,7 @@ export class AppService {
     // github认证页面
     const githubPage = await browser.newPage();
     githubPage.setExtraHTTPHeaders({
-      'Authorization': this.githubToken,
+      Authorization: this.githubToken,
     });
     await githubPage.goto(githubUrl);
     const githubBody = await githubPage.$('body');
@@ -146,13 +180,17 @@ export class AppService {
       console.log('加载页面失败', error);
       return { success: false, msg: 'github认证失败' };
     });
-    await githubBody.evaluate((data: any, userName, password) => {
-      (document as any).querySelector('#login_field').value = userName;
-      (document as any).querySelector('#password').value = password;
-      (document as any)
-        .querySelector('.btn.btn-primary.btn-block.js-sign-in-button')
-        .click();
-    }, userName, password);
+    await githubBody.evaluate(
+      (data: any, userName, password) => {
+        (document as any).querySelector('#login_field').value = userName;
+        (document as any).querySelector('#password').value = password;
+        (document as any)
+          .querySelector('.btn.btn-primary.btn-block.js-sign-in-button')
+          .click();
+      },
+      userName,
+      password,
+    );
     await page.goto(url);
     await page.waitForTimeout(10000);
     githubPage.close();
@@ -196,7 +234,6 @@ export class AppService {
     console.log('dataMsg', dataMsg);
 
     return { success: true, data: dataMsg };
-
   }
 
   //  创建定时任务
@@ -213,12 +250,18 @@ export class AppService {
     // 每天8点执行签到任务
     schedule.scheduleJob('0 30 8 * * *', async () => {
       console.log('scheduleCronstyle:' + new Date());
-      this.sigInCookie();
+      this.cookieList = await this.findCookie();
+      for (let i = 0; i < this.cookieList.length; i++) {
+        const el = JSON.parse(this.cookieList[i].cookie);
+        setTimeout(() => {
+          this.sigInCookie(el);
+        }, Math.round(Math.random() * 10) + 30 * 1000 * 60);
+      }
       // await this.getUser();
       // this.userList.forEach(async ({ userName, password }) => {
       //   this.sigIn(userName, password);
       // });
-    })
+    });
   }
 
   // 账号用户名保存到本地 user.text
@@ -228,7 +271,6 @@ export class AppService {
     try {
       data = fs.readFileSync(path);
       data = data.toString();
-
     } catch (error) {
       fs.writeFileSync(path, '');
     }
@@ -236,7 +278,7 @@ export class AppService {
     data = data.toString();
     const userString = JSON.stringify({ userName, password });
     if (!data.includes(userString)) {
-      data += `\n ` + JSON.stringify({ userName, password })
+      data += `\n ` + JSON.stringify({ userName, password });
     }
     // 写入内容
     fs.writeFileSync(path, data);
@@ -262,6 +304,5 @@ export class AppService {
       this.userList = list;
       resolve(list);
     });
-
   }
 }
