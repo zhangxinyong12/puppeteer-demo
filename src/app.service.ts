@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 import * as schedule from 'node-schedule';
 import * as fs from 'fs';
-import { cookieList } from './cookie';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entity/user.entity';
 import { Repository } from 'typeorm';
@@ -21,6 +20,17 @@ export class AppService {
     // 13271150671@wo.cn woziji@13271150671
     // this.job();
     // this.addUser('13271150671@wo.cn', 'woziji@13271150671');
+  }
+  async init() {
+    this.cookieList = await this.findCookie();
+    for (let i = 0; i < this.cookieList.length; i++) {
+      const el = JSON.parse(this.cookieList[i].cookie);
+      console.log('el', el);
+
+      setTimeout(() => {
+        this.sigInCookie(el);
+      }, Math.round(Math.random() * 10) * 1000 * 60 * 5);
+    }
   }
   // pm2 启动
   // pm2 start npm --name autojuejin -- run start
@@ -57,7 +67,11 @@ export class AppService {
     return list;
   }
 
-  async sigInCookie(el) {
+  async sigInCookie(cookieList) {
+    // 处理脏数据
+    if (!Array.isArray(cookieList)) {
+      return;
+    }
     const url = 'https://juejin.cn';
     const browser = await puppeteer.launch({
       headless: this.headless,
@@ -66,20 +80,22 @@ export class AppService {
 
     const page = await browser.newPage();
     const list = [];
+    console.log('cookieList', cookieList);
 
-    const item = {
-      name: el.name,
-      value: el.value,
-      // url: 'juejin.cn',
-      domain: el.domain,
-      path: el.path,
-      expires: el.expirationDate,
-      httpOnly: el.httpOnly,
-      secure: el.secure,
-      sameSite: el.sameSite,
-    };
-    list.push(item);
-    await page.setCookie(item as any);
+    cookieList.forEach(async (el) => {
+      const item = {
+        name: el.name,
+        value: el.value,
+        // url: 'juejin.cn',
+        domain: el.domain,
+        path: el.path,
+        expires: el.expirationDate,
+        httpOnly: el.httpOnly,
+        secure: el.secure,
+        sameSite: el.sameSite,
+      };
+      list.push(item);
+    });
     await page.setCookie(...(list as any));
 
     await page.goto(url);
@@ -158,7 +174,7 @@ export class AppService {
     // 创建一个puppetter 启动一个浏览器环境
     // headless 是否打开浏览器窗口页面
     const browser = await puppeteer.launch({
-      headless: false,
+      headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     // 打开新页面
@@ -250,13 +266,7 @@ export class AppService {
     // 每天8点执行签到任务
     schedule.scheduleJob('0 30 8 * * *', async () => {
       console.log('scheduleCronstyle:' + new Date());
-      this.cookieList = await this.findCookie();
-      for (let i = 0; i < this.cookieList.length; i++) {
-        const el = JSON.parse(this.cookieList[i].cookie);
-        setTimeout(() => {
-          this.sigInCookie(el);
-        }, Math.round(Math.random() * 10) + 30 * 1000 * 60);
-      }
+      this.init();
       // await this.getUser();
       // this.userList.forEach(async ({ userName, password }) => {
       //   this.sigIn(userName, password);
